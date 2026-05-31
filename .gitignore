@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+config.local.json
+*.local.json
+.env
+.env.*
+secrets.json
+
+# 评估输出
+eval.log
+*.log
+reports/
+results/
+*.report.json
+*.report.md
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# codeflicker 本地讨论文件（含内部设计细节）
+.codeflicker/

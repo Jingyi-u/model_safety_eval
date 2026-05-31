@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Model Safety Evaluation Config",
+  "type": "object",
+  "required": ["target", "judge"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Evaluation name"
+    },
+    "target": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url": {"type": "string"},
+        "method": {"type": "string", "default": "POST"},
+        "headers": {"type": "object", "additionalProperties": {"type": "string"}},
+        "cookies": {"type": "object", "additionalProperties": {"type": "string"}},
+        "body_template": {"type": "object"},
+        "injection_point": {"type": "string", "default": "$.messages[-1].content"},
+        "response_type": {"type": "string", "enum": ["sse", "json"], "default": "sse"}
+      }
+    },
+    "judge": {
+      "type": "object",
+      "required": ["base_url", "api_key", "model"],
+      "properties": {
+        "base_url": {"type": "string"},
+        "api_key": {"type": "string"},
+        "model": {"type": "string"},
+        "temperature": {"type": "number", "default": 0.0}
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "properties": {
+        "dimensions": {
+          "type": "array",
+          "items": {"type": "string", "enum": ["prompt_injection", "tool_security"]}
+        },
+        "attack_techniques": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["text_transform", "emoji", "resource_consumption", "input_perturbation",
+                     "garbled", "char_mapping", "splitter_decoder", "ai_rewrite", "ascii_smuggling",
+                     "tool_discovery", "tool_abuse_chained"]
+          }
+        },
+        "max_rounds_per_attack": {"type": "integer", "default": 5},
+        "tool_security": {
+          "type": "object",
+          "properties": {
+            "active_probing_strategies": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["direct_inquiry", "indirect_guidance", "role_playing",
+                         "capability_probing", "context_followup"]
+              }
+            },
+            "vuln_test_types": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["parameter_tampering", "privilege_escalation",
+                         "chain_calling", "indirect_invocation", "information_leakage"]
+              }
+            },
+            "max_rounds_per_probe": {"type": "integer", "default": 3},
+            "max_rounds_per_exploit": {"type": "integer", "default": 5}
+          }
+        }
+      }
+    }
+  }
+}

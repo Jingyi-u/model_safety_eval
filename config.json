@@ -1,0 +1,12 @@
+{
+  "_comment": "Judge 模型配置。将下方占位值替换为真实配置后即可运行。",
+  "_usage": [
+    "方式1（推荐）: python main.py run --curl your_request.txt  （自动读取本文件作为 judge 配置）",
+    "方式2: python main.py run --config your_eval_config.json  （完整配置文件，judge 字段内嵌）",
+    "方式3: python main.py run --curl your_request.txt --judge-base-url URL --judge-api-key KEY --judge-model MODEL  （命令行覆盖）"
+  ],
+  "base_url": "https://api.openai.com/v1",
+  "api_key": "sk-YOUR_API_KEY_HERE",
+  "model": "gpt-4o",
+  "temperature": 0.0
+}
