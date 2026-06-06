@@ -9,6 +9,8 @@ from model_safety_eval.attacks.prompt_injection.resource_consumption import Reso
 from model_safety_eval.attacks.prompt_injection.input_perturbation import InputPerturbationGenerator
 from model_safety_eval.attacks.prompt_injection.garbled import GarbledGenerator
 from model_safety_eval.attacks.prompt_injection.splitter_decoder import SplitterDecoderGenerator
+from model_safety_eval.attacks.prompt_injection.many_shot import ManyShotGenerator
+from model_safety_eval.attacks.prompt_injection.multilingual import MultilingualGenerator
 
 ATTACK_GENERATORS = {
     "text_transform": TextTransformGenerator,
@@ -22,4 +24,6 @@ ATTACK_GENERATORS = {
     "input_perturbation": InputPerturbationGenerator,
     "garbled": GarbledGenerator,
     "splitter_decoder": SplitterDecoderGenerator,
+    "many_shot": ManyShotGenerator,
+    "multilingual": MultilingualGenerator,
 }

@@ -1,8 +1,7 @@
 import copy
-import json
 from jsonpath_ng import parse as jsonpath_parse
 
-from config.settings import TargetConfig
+from model_safety_eval.config.settings import TargetConfig
 
 
 class RequestTemplate:

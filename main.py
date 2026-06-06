@@ -75,6 +75,8 @@ def run(
     judge_model: str = typer.Option(None, "--judge-model", help="评判模型名称"),
     log: Path = typer.Option("eval.log", "--log", help="日志文件路径（默认 eval.log）"),
     output: Path = typer.Option(None, "--output", "-o", help="报告输出路径"),
+    checkpoint: Path = typer.Option(None, "--checkpoint", help="断点状态文件路径，用于中断后恢复"),
+    resume: bool = typer.Option(False, "--resume", help="从 --checkpoint 指定的状态文件恢复评估"),
 ):
     """运行模型安全评估"""
     _setup_logging(str(log) if log else None)
@@ -106,7 +108,10 @@ def run(
             judge=judge_data,
             evaluation={
                 "dimensions": ["prompt_injection", "tool_security"],
-                "attack_techniques": ["text_transform", "emoji", "char_mapping", "tool_discovery", "tool_abuse_chained"],
+                "attack_techniques": [
+                    "text_transform", "emoji", "char_mapping", "tool_discovery",
+                    "tool_abuse_chained", "many_shot", "multilingual",
+                ],
                 "max_rounds_per_attack": 3,
             },
         )
@@ -119,32 +124,43 @@ def run(
     console.print(f"攻击技术: {', '.join(eval_config.evaluation.attack_techniques)}")
     console.print(f"评判模型: {eval_config.judge.model}")
 
-    workflow = create_workflow(eval_config)
+    if checkpoint:
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
 
-    initial_state = {
-        "request_template_kwargs": {},
-        "injection_point": eval_config.target.injection_point,
-        "response_type": eval_config.target.response_type,
-        "current_dimension": "",
-        "current_technique": "",
-        "current_round": 0,
-        "conversation_history": [],
-        "discovered_info": {},
-        "attack_payload": "",
-        "attack_vector": None,
-        "model_response": "",
-        "judge_result": None,
-        "all_results": [],
-        "should_continue": True,
-        "next_action": "",
-        "attack_plan": [],
-        "plan_index": 0,
-        "current_phase": 1,
-        "phase2_substage": "",
-        "phase1_discovered_tools": [],
-        "phase2_discovered_tools": [],
-        "discovered_tool_details": [],
-    }
+    workflow = create_workflow(eval_config, checkpoint_path=str(checkpoint) if checkpoint else None)
+
+    if resume:
+        if not checkpoint or not checkpoint.exists():
+            console.print("[red]Error: 使用 --resume 时必须提供存在的 --checkpoint 文件[/red]")
+            raise typer.Exit(1)
+        initial_state = json.loads(checkpoint.read_text(encoding="utf-8"))
+        initial_state["resume_from_checkpoint"] = True
+        console.print(f"[yellow]从断点恢复: {checkpoint}[/yellow]")
+    else:
+        initial_state = {
+            "request_template_kwargs": {},
+            "injection_point": eval_config.target.injection_point,
+            "response_type": eval_config.target.response_type,
+            "current_dimension": "",
+            "current_technique": "",
+            "current_round": 0,
+            "conversation_history": [],
+            "discovered_info": {},
+            "attack_payload": "",
+            "attack_vector": None,
+            "model_response": "",
+            "judge_result": None,
+            "all_results": [],
+            "should_continue": True,
+            "next_action": "",
+            "attack_plan": [],
+            "plan_index": 0,
+            "current_phase": 1,
+            "phase2_substage": "",
+            "phase1_discovered_tools": [],
+            "phase2_discovered_tools": [],
+            "discovered_tool_details": [],
+        }
 
     logger.info("开始执行安全评估...")
     result = workflow.invoke(initial_state)

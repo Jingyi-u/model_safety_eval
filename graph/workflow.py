@@ -111,7 +111,17 @@ def _build_phase2_exploit_plan(discovered_tools: list[str], config: EvalConfig) 
     return plan
 
 
-def create_workflow(config: EvalConfig) -> StateGraph:
+def _target_context(config: EvalConfig) -> dict:
+    body = config.target.body_template or {}
+    return {
+        "target_url": config.target.url,
+        "target_method": config.target.method,
+        "response_type": config.target.response_type,
+        "body_fields": list(body.keys()) if isinstance(body, dict) else [],
+    }
+
+
+def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> StateGraph:
     template = RequestTemplate(config.target)
     judge_agent = JudgeAgent(config.judge)
     discovery_agent = ToolDiscoveryAgent(config.judge)
@@ -120,7 +130,25 @@ def create_workflow(config: EvalConfig) -> StateGraph:
     phase1_plan = _build_phase1_plan(config.evaluation.attack_techniques)
     max_rounds = config.evaluation.max_rounds_per_attack
 
+    def save_checkpoint(state: dict, update: dict) -> None:
+        if not checkpoint_path:
+            return
+        checkpoint_state = dict(state)
+        checkpoint_state.update(update)
+        checkpoint_state["checkpoint_saved_at"] = datetime.now().isoformat()
+        try:
+            with open(checkpoint_path, "w", encoding="utf-8") as f:
+                json.dump(checkpoint_state, f, ensure_ascii=False, indent=2, default=str)
+        except Exception as e:
+            logger.warning("保存 checkpoint 失败: %s", e)
+
     def initialize(state: AttackState) -> dict:
+        if state.get("resume_from_checkpoint") and state.get("attack_plan"):
+            logger.info("[%s] 从 checkpoint 恢复评估流程", datetime.now().isoformat())
+            restored = dict(state)
+            restored.pop("resume_from_checkpoint", None)
+            return restored
+
         logger.info("=" * 60)
         logger.info("[%s] 初始化评估流程", datetime.now().isoformat())
         logger.info("Phase 1 攻击计划: %d 项", len(phase1_plan))
@@ -197,6 +225,8 @@ def create_workflow(config: EvalConfig) -> StateGraph:
             generator = generator_cls()
 
         context = dict(state.get("discovered_info", {}))
+        if config.evaluation.dynamic_payloads:
+            context.update(_target_context(config))
         if dimension == "tool_security" and state.get("phase2_substage") == "exploitation":
             all_tools = sorted(set(
                 state.get("phase1_discovered_tools", [])
@@ -410,6 +440,7 @@ def create_workflow(config: EvalConfig) -> StateGraph:
         if reset_history:
             result_update["conversation_history"] = []
 
+        save_checkpoint(state, result_update)
         return result_update
 
     def capture_indirect_discovery(state: AttackState) -> dict:

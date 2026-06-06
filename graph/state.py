@@ -3,7 +3,7 @@ from model_safety_eval.attacks.base import AttackVector
 from model_safety_eval.agents.judge_agent import JudgeResult
 
 
-class AttackState(TypedDict):
+class AttackState(TypedDict, total=False):
     request_template_kwargs: dict
     injection_point: str
     response_type: str
@@ -33,6 +33,8 @@ class AttackState(TypedDict):
     phase1_discovered_tools: list[str]
     phase2_discovered_tools: list[str]
     discovered_tool_details: list[dict]
+    resume_from_checkpoint: bool
+    checkpoint_saved_at: str
 
 
 ATTACK_INTENTS = [

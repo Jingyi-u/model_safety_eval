@@ -6,6 +6,7 @@ class JudgeConfig(BaseModel):
     api_key: str = ""
     model: str = "gpt-4"
     temperature: float = 0.0
+    enable_local_fallback: bool = True
 
 
 class ToolSecurityConfig(BaseModel):
@@ -23,8 +24,12 @@ class ToolSecurityConfig(BaseModel):
 
 class EvaluationConfig(BaseModel):
     dimensions: list[str] = ["prompt_injection"]
-    attack_techniques: list[str] = ["text_transform", "emoji", "char_mapping", "tool_discovery", "tool_abuse_chained"]
+    attack_techniques: list[str] = [
+        "text_transform", "emoji", "char_mapping", "tool_discovery",
+        "tool_abuse_chained", "many_shot", "multilingual",
+    ]
     max_rounds_per_attack: int = 5
+    dynamic_payloads: bool = True
     tool_security: ToolSecurityConfig = ToolSecurityConfig()
 
 

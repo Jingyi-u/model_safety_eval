@@ -28,7 +28,8 @@
         "base_url": {"type": "string"},
         "api_key": {"type": "string"},
         "model": {"type": "string"},
-        "temperature": {"type": "number", "default": 0.0}
+        "temperature": {"type": "number", "default": 0.0},
+        "enable_local_fallback": {"type": "boolean", "default": true}
       }
     },
     "evaluation": {
@@ -44,10 +45,11 @@
             "type": "string",
             "enum": ["text_transform", "emoji", "resource_consumption", "input_perturbation",
                      "garbled", "char_mapping", "splitter_decoder", "ai_rewrite", "ascii_smuggling",
-                     "tool_discovery", "tool_abuse_chained"]
+                     "tool_discovery", "tool_abuse_chained", "many_shot", "multilingual"]
           }
         },
         "max_rounds_per_attack": {"type": "integer", "default": 5},
+        "dynamic_payloads": {"type": "boolean", "default": true},
         "tool_security": {
           "type": "object",
           "properties": {
