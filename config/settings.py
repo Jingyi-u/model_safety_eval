@@ -55,6 +55,11 @@ class EvaluationConfig(BaseModel):
     ]
     max_rounds_per_attack: int = 5
     dynamic_payloads: bool = True
+    enable_payload_mutation: bool = True
+    payload_mutators: list[str] = ["base64", "roleplay_wrapper"]
+    max_mutations_per_vector: int = 1
+    detectors: list[str] = ["sensitive_leak", "tool_boundary"]
+    enable_verification: bool = True
     tool_security: ToolSecurityConfig = ToolSecurityConfig()
 
 

@@ -50,6 +50,25 @@
         },
         "max_rounds_per_attack": {"type": "integer", "default": 5},
         "dynamic_payloads": {"type": "boolean", "default": true},
+        "enable_payload_mutation": {"type": "boolean", "default": true},
+        "payload_mutators": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["base64", "rot13", "zero_width", "roleplay_wrapper", "markdown_link"]
+          },
+          "default": ["base64", "roleplay_wrapper"]
+        },
+        "max_mutations_per_vector": {"type": "integer", "default": 1},
+        "detectors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["refusal", "sensitive_leak", "tool_boundary"]
+          },
+          "default": ["sensitive_leak", "tool_boundary"]
+        },
+        "enable_verification": {"type": "boolean", "default": true},
         "tool_security": {
           "type": "object",
           "properties": {

@@ -12,6 +12,7 @@ def generate_report(
     discovered_info: dict | None = None,
     phase1_tools: list[str] | None = None,
     phase2_tools: list[str] | None = None,
+    baseline_comparison: dict | None = None,
 ) -> dict:
     dimension_results = {}
     for result in all_results:
@@ -87,6 +88,15 @@ def generate_report(
         r for r in all_results
         if r.get("judge_result", {}).get("data_exfiltration")
     ]
+    confirmed_results = [
+        r for r in all_results
+        if r.get("verification", {}).get("confirmed")
+    ]
+    detector_findings = [
+        finding
+        for r in all_results
+        for finding in r.get("detector_findings", [])
+    ]
 
     phase1_discovered = phase1_tools or []
     phase2_discovered = phase2_tools or []
@@ -122,6 +132,8 @@ def generate_report(
             "unsafe_argument_count": len(unsafe_argument_results),
             "boundary_bypass_count": len(boundary_bypass_results),
             "data_exfiltration_count": len(data_exfiltration_results),
+            "confirmed_findings_count": len(confirmed_results),
+            "detector_findings_count": len(detector_findings),
             "llm_generated_payloads": sum(1 for r in all_results if r.get("generation_method") == "llm"),
             "static_payloads": sum(1 for r in all_results if r.get("generation_method") != "llm"),
             "top_breaches": [
@@ -172,6 +184,7 @@ def generate_report(
         },
         "attack_timeline": attack_timeline,
         "security_recommendations": security_recommendations,
+        "baseline_comparison": baseline_comparison or {},
         "dimensions": dimension_details,
         "attack_details": all_results,
     }
@@ -428,6 +441,29 @@ def report_to_markdown(report: dict) -> str:
         if len(breach_events) > 20:
             lines.append(f"\n... 共 {len(breach_events)} 条突破事件\n")
 
+    baseline = report.get("baseline_comparison", {})
+    if baseline:
+        lines.append("## 基线对比\n")
+        status = "存在安全回归" if baseline.get("regression") else "未发现明显回归"
+        lines.append(f"- **结论**: {status}")
+        if baseline.get("baseline_name"):
+            lines.append(f"- **基线**: {baseline.get('baseline_name')}")
+        deltas = baseline.get("deltas", {})
+        if deltas:
+            lines.append("\n| 指标 | 当前 | 基线 | 变化 |")
+            lines.append("|------|------|------|------|")
+            for key, data in deltas.items():
+                lines.append(f"| {key} | {data['current']} | {data['baseline']} | {data['delta']} |")
+        if baseline.get("new_findings"):
+            lines.append("\n### 新增风险键\n")
+            for finding in baseline["new_findings"][:20]:
+                lines.append(f"- `{finding}`")
+        if baseline.get("fixed_findings"):
+            lines.append("\n### 已消失风险键\n")
+            for finding in baseline["fixed_findings"][:20]:
+                lines.append(f"- `{finding}`")
+        lines.append("")
+
     tool_assessment = report.get("tool_security_assessment", {})
     discovered_tools = tool_assessment.get("discovered_tools", [])
     if discovered_tools:
@@ -448,6 +484,8 @@ def report_to_markdown(report: dict) -> str:
         lines.append(f"- **不安全参数数**: {summary.get('unsafe_argument_count', 0)}")
         lines.append(f"- **边界绕过数**: {summary.get('boundary_bypass_count', 0)}")
         lines.append(f"- **数据外带迹象数**: {summary.get('data_exfiltration_count', 0)}")
+        lines.append(f"- **检测器命中数**: {summary.get('detector_findings_count', 0)}")
+        lines.append(f"- **复核确认数**: {summary.get('confirmed_findings_count', 0)}")
 
         probing_summary = tool_assessment.get("probing_results_summary", {})
         if probing_summary.get("total_probes", 0) > 0:

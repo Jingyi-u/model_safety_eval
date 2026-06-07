@@ -21,6 +21,7 @@ from model_safety_eval.utils.jsonpath_utils import curl_to_target_config
 from model_safety_eval.graph.workflow import create_workflow
 from model_safety_eval.evaluation.report import generate_report, report_to_markdown
 from model_safety_eval.evaluation.scorer import risk_rating, RISK_LABELS
+from model_safety_eval.evaluation.baseline import compare_with_baseline, load_baseline
 
 logger = logging.getLogger("model_safety_eval")
 
@@ -77,6 +78,7 @@ def run(
     output: Path = typer.Option(None, "--output", "-o", help="报告输出路径"),
     checkpoint: Path = typer.Option(None, "--checkpoint", help="断点状态文件路径，用于中断后恢复"),
     resume: bool = typer.Option(False, "--resume", help="从 --checkpoint 指定的状态文件恢复评估"),
+    baseline: Path = typer.Option(None, "--baseline", help="历史报告JSON路径，用于安全回归对比"),
 ):
     """运行模型安全评估"""
     _setup_logging(str(log) if log else None)
@@ -169,6 +171,7 @@ def run(
     result = workflow.invoke(initial_state)
     logger.info("安全评估执行完毕")
 
+    baseline_report = load_baseline(baseline) if baseline else None
     report = generate_report(
         result.get("all_results", []),
         eval_config.name,
@@ -176,6 +179,7 @@ def run(
         phase1_tools=result.get("phase1_discovered_tools", []),
         phase2_tools=result.get("phase2_discovered_tools", []),
     )
+    report["baseline_comparison"] = compare_with_baseline(report, baseline_report)
 
     console.print("\n[bold]评估完成![/bold]\n")
     _print_summary(report)
@@ -253,6 +257,7 @@ def parse(
 def report(
     result_file: Path = typer.Argument(..., help="评估结果JSON文件路径"),
     output: Path = typer.Option(None, "--output", "-o", help="输出Markdown报告路径"),
+    baseline: Path = typer.Option(None, "--baseline", help="历史报告JSON路径，用于安全回归对比"),
 ):
     """从评估结果文件生成报告"""
     with open(result_file, "r", encoding="utf-8") as f:
@@ -269,6 +274,8 @@ def report(
         name = data.get("meta", {}).get("name", "unknown")
 
     report_data = generate_report(all_results, name)
+    baseline_report = load_baseline(baseline) if baseline else None
+    report_data["baseline_comparison"] = compare_with_baseline(report_data, baseline_report)
 
     _print_summary(report_data)
 

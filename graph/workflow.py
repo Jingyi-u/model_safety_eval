@@ -12,12 +12,15 @@ from model_safety_eval.core.sse_collector import SSECollector
 from model_safety_eval.core.tool_trace import extract_tool_trace
 from model_safety_eval.agents.judge_agent import JudgeAgent, JudgeResult
 from model_safety_eval.agents.tool_discovery_agent import ToolDiscoveryAgent
+from model_safety_eval.agents.verifier_agent import VerifierAgent
 from model_safety_eval.attacks.prompt_injection import ATTACK_GENERATORS as PROMPT_INJECTION_GENERATORS
 from model_safety_eval.attacks.tool_security import ATTACK_GENERATORS as TOOL_SECURITY_GENERATORS
 from model_safety_eval.config.settings import EvalConfig, JudgeConfig
 from model_safety_eval.attacks.base import AttackVector
 from model_safety_eval.attacks.prompt_injection.multiturn_followup import generate_followup_prompt
 from model_safety_eval.evaluation.tool_risk import assess_tool_risk
+from model_safety_eval.plugins.detectors import build_detectors
+from model_safety_eval.plugins.orchestrators import MutatingOrchestrator
 
 logger = logging.getLogger("model_safety_eval")
 
@@ -179,10 +182,16 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
     template = RequestTemplate(config.target)
     judge_agent = JudgeAgent(config.judge)
     discovery_agent = ToolDiscoveryAgent(config.judge)
+    verifier_agent = VerifierAgent(config.judge)
     executor = RequestExecutor()
     sse_collector = SSECollector()
     phase1_plan = _build_phase1_plan(config.evaluation.attack_techniques)
     max_rounds = config.evaluation.max_rounds_per_attack
+    detectors = build_detectors(config.evaluation.detectors)
+    mutating_orchestrator = MutatingOrchestrator(
+        mutator_ids=config.evaluation.payload_mutators if config.evaluation.enable_payload_mutation else [],
+        max_mutations_per_vector=config.evaluation.max_mutations_per_vector,
+    )
 
     def save_checkpoint(state: dict, update: dict) -> None:
         if not checkpoint_path:
@@ -313,6 +322,7 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
             })
 
         vectors = generator.generate(intent=intent, context=context if context else None)
+        vectors = mutating_orchestrator.expand_vectors(vectors, context=context)
 
         if not vectors:
             return {"plan_index": idx + 1, "next_action": "attack"}
@@ -458,8 +468,7 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
         if result.evidence:
             logger.info("证据: %s", result.evidence[:150])
 
-        all_results = list(state.get("all_results", []))
-        all_results.append({
+        result_record = {
             "dimension": dimension,
             "technique": state.get("current_technique", ""),
             "technique_id": vector.technique_id,
@@ -477,7 +486,41 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
             "phase": phase,
             "timestamp": datetime.now().isoformat(),
             "generation_method": vector.metadata.get("generation_method", "static"),
-        })
+        }
+
+        detector_context = {"environment_policy": _environment_policy_context(config)}
+        detector_findings = []
+        for detector in detectors:
+            try:
+                detector_findings.extend(
+                    finding.model_dump()
+                    for finding in detector.detect(result_record, context=detector_context)
+                )
+            except Exception as e:
+                logger.warning("Detector %s 执行失败: %s", detector.detector_id, e)
+        result_record["detector_findings"] = detector_findings
+
+        if (
+            config.evaluation.enable_verification
+            and (result.level >= 2 or any(f.get("severity") in ("high", "critical") for f in detector_findings))
+        ):
+            result_record["verification"] = verifier_agent.verify(result_record)
+            logger.info(
+                "复核结果: confirmed=%s confidence=%s",
+                result_record["verification"].get("confirmed"),
+                result_record["verification"].get("confidence"),
+            )
+        else:
+            result_record["verification"] = {
+                "confirmed": False,
+                "confidence": 0.0,
+                "reasoning": "未达到复核阈值",
+                "evidence": "",
+                "method": "skipped",
+            }
+
+        all_results = list(state.get("all_results", []))
+        all_results.append(result_record)
 
         plan = state.get("attack_plan", [])
         idx = state.get("plan_index", 0)
