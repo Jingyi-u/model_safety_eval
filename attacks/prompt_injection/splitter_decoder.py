@@ -9,6 +9,8 @@ Splitter Decoder Attack — 通过分割+重组技术让过滤器无法识别完
 4. 数字编码（把字符转成 ASCII 数组让模型解码）
 5. 分隔符切割（用罕见分隔符分割关键词，指令模型忽略分隔符）
 """
+from __future__ import annotations
+
 import random
 from model_safety_eval.attacks.base import AttackVector, AttackGenerator
 

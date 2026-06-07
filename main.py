@@ -160,6 +160,9 @@ def run(
             "phase1_discovered_tools": [],
             "phase2_discovered_tools": [],
             "discovered_tool_details": [],
+            "tool_assessment": [],
+            "last_tool_trace": {},
+            "last_tool_events": [],
         }
 
     logger.info("开始执行安全评估...")

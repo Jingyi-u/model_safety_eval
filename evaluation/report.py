@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from datetime import datetime
 from model_safety_eval.evaluation.scorer import compute_dimension_score, compute_overall_score, risk_rating, RISK_LABELS
@@ -56,13 +58,35 @@ def generate_report(
     discovered_tools = (discovered_info or {}).get("tools", [])
     chain_results = [r for r in all_results if r.get("technique_id") == "tool_abuse_chained"]
     exploit_results = [r for r in all_results if r.get("technique_id") == "tool_vuln_exploit"]
-    all_exploit_results = exploit_results + chain_results
-    tool_assessment = assess_tool_risk(discovered_tools, all_exploit_results)
+    capability_results = [r for r in all_results if r.get("technique_id") == "tool_capability_exploit"]
+    all_exploit_results = exploit_results + chain_results + capability_results
+    discovered_tool_details = (discovered_info or {}).get("tool_details", [])
+    tool_assessment = (discovered_info or {}).get("tool_assessment") or assess_tool_risk(
+        discovered_tools,
+        all_exploit_results,
+        tool_details=discovered_tool_details,
+    )
 
     critical_tools = [t for t in tool_assessment if t["risk_level"] == "critical"]
     high_tools = [t for t in tool_assessment if t["risk_level"] == "high"]
 
     probing_results = [r for r in all_results if r.get("technique_id") == "tool_active_probing"]
+    tool_trace_results = [
+        r for r in all_results
+        if r.get("tool_trace", {}).get("tool_called")
+    ]
+    unsafe_argument_results = [
+        r for r in all_results
+        if r.get("judge_result", {}).get("unsafe_argument")
+    ]
+    boundary_bypass_results = [
+        r for r in all_results
+        if r.get("judge_result", {}).get("boundary_bypass")
+    ]
+    data_exfiltration_results = [
+        r for r in all_results
+        if r.get("judge_result", {}).get("data_exfiltration")
+    ]
 
     phase1_discovered = phase1_tools or []
     phase2_discovered = phase2_tools or []
@@ -93,6 +117,11 @@ def generate_report(
             "high_risk_tools_count": len(high_tools),
             "chain_attack_count": len(all_exploit_results),
             "chain_breach_count": len([r for r in all_exploit_results if r.get("judge_result", {}).get("level", 0) >= 2]),
+            "capability_test_count": len(capability_results),
+            "observed_tool_call_count": len(tool_trace_results),
+            "unsafe_argument_count": len(unsafe_argument_results),
+            "boundary_bypass_count": len(boundary_bypass_results),
+            "data_exfiltration_count": len(data_exfiltration_results),
             "llm_generated_payloads": sum(1 for r in all_results if r.get("generation_method") == "llm"),
             "static_payloads": sum(1 for r in all_results if r.get("generation_method") != "llm"),
             "top_breaches": [
@@ -124,6 +153,8 @@ def generate_report(
                 "partial_exploits": sum(1 for r in all_exploit_results if r.get("judge_result", {}).get("level", 0) >= 2),
             },
             "exploit_by_test_type": _breakdown_by_test_type(all_exploit_results),
+            "capability_test_summary": _breakdown_by_test_type(capability_results),
+            "tool_trace_summary": _build_tool_trace_summary(all_results),
             "tool_parameter_attacks": tool_parameter_attacks,
             "chain_attack_details": [
                 {
@@ -219,6 +250,38 @@ def _build_tool_parameter_attacks(exploit_results: list[dict]) -> list[dict]:
             "timestamp": r.get("timestamp", ""),
         })
     return attacks
+
+
+def _build_tool_trace_summary(all_results: list[dict]) -> dict:
+    traces = [r.get("tool_trace", {}) for r in all_results if r.get("tool_trace")]
+    called = [t for t in traces if t.get("tool_called")]
+    tool_names = sorted({
+        name
+        for trace in called
+        for name in trace.get("tool_names", [])
+    })
+    urls = sorted({
+        url
+        for trace in traces
+        for url in trace.get("urls", [])
+    })
+    paths = sorted({
+        path
+        for trace in traces
+        for path in trace.get("paths", [])
+    })
+    command_hints = sorted({
+        command
+        for trace in traces
+        for command in trace.get("command_hints", [])
+    })
+    return {
+        "observed_tool_calls": len(called),
+        "tool_names": tool_names,
+        "urls": urls[:20],
+        "paths": paths[:20],
+        "command_hints": command_hints[:20],
+    }
 
 
 def _generate_security_recommendations(
@@ -380,6 +443,11 @@ def report_to_markdown(report: dict) -> str:
         lines.append(f"\n- **发现工具总数**: {summary.get('discovered_tools_count', 0)}")
         lines.append(f"- **Critical 风险工具**: {summary.get('critical_tools_count', 0)}")
         lines.append(f"- **High 风险工具**: {summary.get('high_risk_tools_count', 0)}")
+        lines.append(f"- **能力专项测试数**: {summary.get('capability_test_count', 0)}")
+        lines.append(f"- **观测到工具调用数**: {summary.get('observed_tool_call_count', 0)}")
+        lines.append(f"- **不安全参数数**: {summary.get('unsafe_argument_count', 0)}")
+        lines.append(f"- **边界绕过数**: {summary.get('boundary_bypass_count', 0)}")
+        lines.append(f"- **数据外带迹象数**: {summary.get('data_exfiltration_count', 0)}")
 
         probing_summary = tool_assessment.get("probing_results_summary", {})
         if probing_summary.get("total_probes", 0) > 0:
@@ -404,6 +472,28 @@ def report_to_markdown(report: dict) -> str:
                 tool_count = len(data.get("by_tool", {}))
                 lines.append(f"| {test_type} | {data['total']} | {data['breach']} | L{data['max_level']} | {tool_count} |")
 
+        capability_summary = tool_assessment.get("capability_test_summary", {})
+        if capability_summary:
+            lines.append(f"\n#### 能力专项测试分解\n")
+            lines.append("| 专项类型 | 总数 | 突破数 | 最大等级 | 覆盖工具数 |")
+            lines.append("|---------|------|-------|---------|----------|")
+            for test_type, data in capability_summary.items():
+                tool_count = len(data.get("by_tool", {}))
+                lines.append(f"| {test_type} | {data['total']} | {data['breach']} | L{data['max_level']} | {tool_count} |")
+
+        trace_summary = tool_assessment.get("tool_trace_summary", {})
+        if trace_summary and trace_summary.get("observed_tool_calls", 0) > 0:
+            lines.append(f"\n### 工具调用轨迹摘要\n")
+            lines.append(f"- 观测到工具调用: {trace_summary.get('observed_tool_calls', 0)}")
+            if trace_summary.get("tool_names"):
+                lines.append(f"- 工具名: {', '.join(f'`{t}`' for t in trace_summary['tool_names'])}")
+            if trace_summary.get("urls"):
+                lines.append(f"- URL 证据: {', '.join(f'`{u}`' for u in trace_summary['urls'][:5])}")
+            if trace_summary.get("paths"):
+                lines.append(f"- 路径证据: {', '.join(f'`{p}`' for p in trace_summary['paths'][:5])}")
+            if trace_summary.get("command_hints"):
+                lines.append(f"- 命令迹象: {', '.join(f'`{c}`' for c in trace_summary['command_hints'][:8])}")
+
         param_attacks = tool_assessment.get("tool_parameter_attacks", [])
         if param_attacks:
             lines.append(f"\n### 工具参数级攻击详情\n")
@@ -417,11 +507,12 @@ def report_to_markdown(report: dict) -> str:
         lines.append(f"- **漏洞利用成功数**: {summary.get('chain_breach_count', 0)}\n")
 
         lines.append("### 工具风险清单\n")
-        lines.append("| 工具名 | 风险等级 | 风险类型 | 说明 | 漏洞利用 | 最大泄露等级 |")
-        lines.append("|--------|---------|---------|------|---------|------------|")
+        lines.append("| 工具名 | 类型 | 能力标签 | 风险等级 | 风险类型 | 说明 | 漏洞利用 | 最大泄露等级 |")
+        lines.append("|--------|------|---------|---------|---------|------|---------|------------|")
         for t in tool_assessment.get("tool_risks", []):
             chain_info = f"{t['chain_breach_count']}/{t['chain_attack_count']}" if t['chain_attack_count'] > 0 else "-"
-            lines.append(f"| `{t['name']}` | **{t['risk_level']}** | {t['risk_type']} | {t['description'][:40]} | {chain_info} | L{t['chain_max_level']} |")
+            capabilities = ", ".join(t.get("capabilities", [])) or "-"
+            lines.append(f"| `{t['name']}` | {t.get('tool_type', 'unknown')} | {capabilities} | **{t['risk_level']}** | {t['risk_type']} | {t['description'][:40]} | {chain_info} | L{t['chain_max_level']} |")
 
         chain_details = tool_assessment.get("chain_attack_details", [])
         if chain_details:

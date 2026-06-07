@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 SSE（Server-Sent Events）响应收集器。
 
@@ -129,6 +131,26 @@ class SSECollector:
         logger.debug("SSE 收集完成: %d chars", len(result))
         return result
 
+    def collect_with_events(self, response) -> dict:
+        """一次性收集流式文本和原始事件，避免二次消费 stream。"""
+        parts = []
+        events = []
+        try:
+            for data_str in self._iter_sse_lines(response):
+                event = self._parse_event(data_str)
+                events.append(event)
+                content = self._parse_data_line(data_str)
+                if content:
+                    parts.append(content)
+        except Exception as e:
+            logger.warning("SSE 收集中断: %s（已收集 %d 事件）", e, len(events))
+
+        result = "".join(parts)
+        if not result:
+            result = self._try_read_full_body(response)
+        logger.debug("SSE 收集完成: %d chars, %d events", len(result), len(events))
+        return {"text": result, "events": events}
+
     def collect_raw(self, response) -> list[dict]:
         """收集原始 SSE 事件列表（每个为解析后的 dict）"""
         events = []
@@ -257,6 +279,16 @@ class SSECollector:
             # 非 JSON，直接当文本
             return data_str if data_str else ""
         return ""
+
+    @staticmethod
+    def _parse_event(data_str: str) -> dict:
+        try:
+            parsed = json.loads(data_str)
+            if isinstance(parsed, dict):
+                return parsed
+            return {"data": parsed}
+        except (json.JSONDecodeError, ValueError):
+            return {"raw": data_str}
 
     @staticmethod
     def _try_read_full_body(response) -> str:

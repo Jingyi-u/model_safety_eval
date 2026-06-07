@@ -33,6 +33,9 @@ class AttackState(TypedDict, total=False):
     phase1_discovered_tools: list[str]
     phase2_discovered_tools: list[str]
     discovered_tool_details: list[dict]
+    tool_assessment: list[dict]
+    last_tool_trace: dict
+    last_tool_events: list[dict]
     resume_from_checkpoint: bool
     checkpoint_saved_at: str
 
@@ -50,4 +53,8 @@ TOOL_SECURITY_INTENTS = [
     "chain_calling",
     "indirect_invocation",
     "information_leakage",
+    "command_execution",
+    "network_ssrf",
+    "file_boundary",
+    "data_exfiltration_chain",
 ]

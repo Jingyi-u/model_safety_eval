@@ -8,6 +8,8 @@ ASCII Smuggling Attack — 利用 Unicode 不可见/标签字符把恶意指令
 3. Variation Selector 隐写（将隐藏指令附在正常字符后）
 4. 右到左覆盖 (RLO) 视觉欺骗
 """
+from __future__ import annotations
+
 from model_safety_eval.attacks.base import AttackVector, AttackGenerator
 
 # ── 1. Tag-block 编码 ─────────────────────────────────────────────

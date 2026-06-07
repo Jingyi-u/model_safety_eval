@@ -9,6 +9,7 @@ from model_safety_eval.graph.state import AttackState, ATTACK_INTENTS
 from model_safety_eval.core.request_template import RequestTemplate
 from model_safety_eval.core.executor import RequestExecutor
 from model_safety_eval.core.sse_collector import SSECollector
+from model_safety_eval.core.tool_trace import extract_tool_trace
 from model_safety_eval.agents.judge_agent import JudgeAgent, JudgeResult
 from model_safety_eval.agents.tool_discovery_agent import ToolDiscoveryAgent
 from model_safety_eval.attacks.prompt_injection import ATTACK_GENERATORS as PROMPT_INJECTION_GENERATORS
@@ -16,6 +17,7 @@ from model_safety_eval.attacks.tool_security import ATTACK_GENERATORS as TOOL_SE
 from model_safety_eval.config.settings import EvalConfig, JudgeConfig
 from model_safety_eval.attacks.base import AttackVector
 from model_safety_eval.attacks.prompt_injection.multiturn_followup import generate_followup_prompt
+from model_safety_eval.evaluation.tool_risk import assess_tool_risk
 
 logger = logging.getLogger("model_safety_eval")
 
@@ -96,7 +98,35 @@ def _build_phase2_probing_plan(config: EvalConfig) -> list[dict]:
     }]
 
 
-def _build_phase2_exploit_plan(discovered_tools: list[str], config: EvalConfig) -> list[dict]:
+CAPABILITY_TEST_REQUIREMENTS = {
+    "command_execution": {"command_execution"},
+    "network_ssrf": {"network_request", "browser"},
+    "file_boundary": {"file_read", "file_write"},
+    "data_exfiltration_chain": {"file_read", "network_request"},
+}
+
+
+def _has_capability_for_test(tool_assessment: list[dict], test_type: str) -> bool:
+    required = CAPABILITY_TEST_REQUIREMENTS.get(test_type)
+    if not required:
+        return True
+    for tool in tool_assessment:
+        capabilities = set(tool.get("capabilities", []))
+        if test_type == "data_exfiltration_chain":
+            all_capabilities = set()
+            for assessed in tool_assessment:
+                all_capabilities.update(assessed.get("capabilities", []))
+            return required.issubset(all_capabilities)
+        if capabilities.intersection(required):
+            return True
+    return False
+
+
+def _build_phase2_exploit_plan(
+    discovered_tools: list[str],
+    config: EvalConfig,
+    tool_assessment: list[dict] | None = None,
+) -> list[dict]:
     if not discovered_tools:
         return []
     test_types = config.evaluation.tool_security.vuln_test_types
@@ -108,6 +138,17 @@ def _build_phase2_exploit_plan(discovered_tools: list[str], config: EvalConfig) 
             "intent": test_type,
             "test_types": [test_type],
         })
+    if config.evaluation.tool_security.enable_capability_specific_tests:
+        assessment = tool_assessment or assess_tool_risk(discovered_tools)
+        for test_type in config.evaluation.tool_security.capability_test_types:
+            if not _has_capability_for_test(assessment, test_type):
+                continue
+            plan.append({
+                "technique_id": "tool_capability_exploit",
+                "technique_name": "工具能力专项测试",
+                "intent": test_type,
+                "test_types": [test_type],
+            })
     return plan
 
 
@@ -119,6 +160,19 @@ def _target_context(config: EvalConfig) -> dict:
         "response_type": config.target.response_type,
         "body_fields": list(body.keys()) if isinstance(body, dict) else [],
     }
+
+
+def _environment_policy_context(config: EvalConfig) -> dict:
+    ts_config = config.evaluation.tool_security
+    policy = ts_config.environment_policy.model_dump()
+    if ts_config.allowed_domains:
+        policy["allowed_domains"] = sorted(set(policy.get("allowed_domains", []) + ts_config.allowed_domains))
+    if ts_config.allowed_paths:
+        policy["allowed_paths"] = sorted(set(policy.get("allowed_paths", []) + ts_config.allowed_paths))
+    if ts_config.denied_networks:
+        policy["denied_networks"] = sorted(set(policy.get("denied_networks", []) + ts_config.denied_networks))
+    policy["ssrf_canary_url"] = ts_config.ssrf_canary_url
+    return policy
 
 
 def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> StateGraph:
@@ -176,6 +230,9 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
             "phase1_discovered_tools": [],
             "phase2_discovered_tools": [],
             "discovered_tool_details": [],
+            "tool_assessment": [],
+            "last_tool_trace": {},
+            "last_tool_events": [],
         }
 
     def generate_attack(state: AttackState) -> dict:
@@ -221,6 +278,12 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
                 judge_config=config.judge,
                 tool_details=tool_details if tool_details else None,
             )
+        elif dimension == "tool_security" and technique_id == "tool_capability_exploit":
+            tool_details = state.get("discovered_tool_details", [])
+            generator = generator_cls(
+                judge_config=config.judge,
+                tool_details=tool_details if tool_details else None,
+            )
         else:
             generator = generator_cls()
 
@@ -237,6 +300,17 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
             tool_details = state.get("discovered_tool_details", [])
             if tool_details:
                 context["tool_details"] = tool_details
+            tool_assessment = state.get("tool_assessment", [])
+            if tool_assessment:
+                context["tool_assessment"] = tool_assessment
+            ts_config = config.evaluation.tool_security
+            context.update({
+                "ssrf_canary_url": ts_config.ssrf_canary_url,
+                "allowed_domains": ts_config.allowed_domains,
+                "allowed_paths": ts_config.allowed_paths,
+                "denied_networks": ts_config.denied_networks,
+                "environment_policy": _environment_policy_context(config),
+            })
 
         vectors = generator.generate(intent=intent, context=context if context else None)
 
@@ -308,13 +382,17 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
         try:
             if template.response_type == "sse":
                 response = executor.execute_stream(request_kwargs)
-                model_response = sse_collector.collect(response)
+                collected = sse_collector.collect_with_events(response)
+                model_response = collected["text"]
+                tool_events = collected["events"]
                 response.close()
             else:
                 response = executor.execute(request_kwargs)
                 model_response = response.text
+                tool_events = []
         except Exception as e:
             model_response = f"[ERROR] {type(e).__name__}: {e}"
+            tool_events = []
             logger.error("[%s] 请求失败: %s\n%s", datetime.now().isoformat(), e, traceback.format_exc()[:300])
 
         logger.info("[%s] 模型响应 (%d chars): %s", datetime.now().isoformat(), len(model_response), model_response[:200])
@@ -326,6 +404,7 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
 
         return {
             "model_response": model_response,
+            "last_tool_events": tool_events,
             "conversation_history": updated_history,
             "next_action": "judge",
         }
@@ -339,9 +418,17 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
         response = state.get("model_response", "")
         dimension = state.get("current_dimension", "prompt_injection")
         phase = state.get("current_phase", 1)
+        tool_events = state.get("last_tool_events", [])
+        tool_trace = extract_tool_trace(response, tool_events=tool_events) if dimension == "tool_security" else {}
 
         try:
-            result = judge_agent.judge(vector, response, dimension=dimension)
+            result = judge_agent.judge(
+                vector,
+                response,
+                dimension=dimension,
+                tool_trace=tool_trace,
+                environment_policy=_environment_policy_context(config) if dimension == "tool_security" else None,
+            )
         except Exception as e:
             result = JudgeResult(
                 level=0,
@@ -355,6 +442,11 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
             "level": result.level,
             "reasoning": result.reasoning,
             "evidence": result.evidence,
+            "risk_category": result.risk_category,
+            "tool_called": result.tool_called,
+            "unsafe_argument": result.unsafe_argument,
+            "boundary_bypass": result.boundary_bypass,
+            "data_exfiltration": result.data_exfiltration,
         }
 
         logger.info(
@@ -377,6 +469,8 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
             "payload_variant": vector.metadata.get("variant", ""),
             "payload_original": vector.metadata.get("original", ""),
             "model_response": response,
+            "tool_trace": tool_trace,
+            "tool_events": tool_events,
             "judge_result": result_dict,
             "round": state.get("current_round", 0),
             "metadata": vector.metadata,
@@ -431,6 +525,7 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
 
         result_update = {
             "judge_result": result_dict,
+            "last_tool_trace": tool_trace,
             "all_results": all_results,
             "plan_index": idx,
             "current_round": current_round,
@@ -496,14 +591,30 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
         ))
         info["tools"] = all_tools
         info["phase2_tools"] = merged_phase2
+        tool_assessment = assess_tool_risk(all_tools, tool_details=tool_details)
+        info["tool_assessment"] = tool_assessment
 
         if discovered_tools:
             logger.info("[%s] Phase 2 主动探测发现工具: %s", datetime.now().isoformat(), discovered_tools)
+        if tool_assessment:
+            logger.info(
+                "[%s] 工具能力分类: %s",
+                datetime.now().isoformat(),
+                [
+                    {
+                        "name": t.get("name"),
+                        "type": t.get("tool_type"),
+                        "capabilities": t.get("capabilities"),
+                    }
+                    for t in tool_assessment
+                ],
+            )
 
         return {
             "phase2_discovered_tools": merged_phase2,
             "discovered_info": info,
             "discovered_tool_details": tool_details,
+            "tool_assessment": tool_assessment,
             "next_action": "attack",
         }
 
@@ -558,8 +669,21 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
         info = dict(state.get("discovered_info", {}))
         info["tools"] = all_tools
         info["tool_details"] = tool_details
+        tool_assessment = assess_tool_risk(all_tools, tool_details=tool_details)
+        info["tool_assessment"] = tool_assessment
 
-        exploit_plan = _build_phase2_exploit_plan(all_tools, config)
+        if tool_assessment:
+            for t in tool_assessment:
+                logger.info(
+                    "  - %s | type=%s | capabilities=%s | risk=%s/%s",
+                    t.get("name"),
+                    t.get("tool_type"),
+                    ",".join(t.get("capabilities", [])) or "-",
+                    t.get("risk_level"),
+                    t.get("risk_type"),
+                )
+
+        exploit_plan = _build_phase2_exploit_plan(all_tools, config, tool_assessment)
 
         return {
             "phase2_substage": "exploitation",
@@ -569,6 +693,7 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
             "conversation_history": [],
             "discovered_info": info,
             "discovered_tool_details": tool_details,
+            "tool_assessment": tool_assessment,
             "should_continue": len(exploit_plan) > 0,
             "next_action": "attack" if len(exploit_plan) > 0 else "report",
         }

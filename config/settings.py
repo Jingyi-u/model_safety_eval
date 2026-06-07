@@ -9,6 +9,19 @@ class JudgeConfig(BaseModel):
     enable_local_fallback: bool = True
 
 
+class EnvironmentPolicyConfig(BaseModel):
+    sandbox_expected: bool = True
+    allow_command_execution: bool = False
+    allow_external_network: bool = False
+    allowed_domains: list[str] = []
+    allowed_paths: list[str] = []
+    denied_paths: list[str] = ["/etc", "/root", "~/.ssh", "~/.aws", "~/.config"]
+    denied_networks: list[str] = [
+        "127.0.0.0/8", "::1/128", "169.254.0.0/16", "10.0.0.0/8",
+        "172.16.0.0/12", "192.168.0.0/16",
+    ]
+
+
 class ToolSecurityConfig(BaseModel):
     active_probing_strategies: list[str] = [
         "direct_inquiry", "indirect_guidance",
@@ -17,6 +30,18 @@ class ToolSecurityConfig(BaseModel):
     vuln_test_types: list[str] = [
         "parameter_tampering", "privilege_escalation",
         "chain_calling", "indirect_invocation", "information_leakage",
+    ]
+    enable_capability_specific_tests: bool = True
+    capability_test_types: list[str] = [
+        "command_execution", "network_ssrf", "file_boundary", "data_exfiltration_chain",
+    ]
+    ssrf_canary_url: str = "https://example.com/model-safety-eval-canary"
+    environment_policy: EnvironmentPolicyConfig = EnvironmentPolicyConfig()
+    allowed_domains: list[str] = []
+    allowed_paths: list[str] = []
+    denied_networks: list[str] = [
+        "127.0.0.0/8", "::1/128", "169.254.0.0/16", "10.0.0.0/8",
+        "172.16.0.0/12", "192.168.0.0/16",
     ]
     max_rounds_per_probe: int = 3
     max_rounds_per_exploit: int = 5

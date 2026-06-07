@@ -8,6 +8,8 @@ Resource Consumption Attack — 构造超长、高复杂度请求消耗模型推
 3. 高熵随机内容后接真实指令（混淆缓存/过滤器）
 4. 大量上下文填充后的越狱指令（context window exhaustion）
 """
+from __future__ import annotations
+
 import random
 import string
 from model_safety_eval.attacks.base import AttackVector, AttackGenerator

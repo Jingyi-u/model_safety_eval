@@ -5,6 +5,8 @@
 根据具体回复内容动态生成下一轮跟进 prompt，
 将对话推向更深的越狱/信息泄露。
 """
+from __future__ import annotations
+
 import logging
 
 logger = logging.getLogger(__name__)

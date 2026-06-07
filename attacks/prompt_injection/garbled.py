@@ -9,6 +9,8 @@ Garbled Attack — 故意引入乱码/编码噪声让过滤器失效，
 4. Morse 码嵌入
 5. HTML 实体编码
 """
+from __future__ import annotations
+
 import base64
 import random
 from model_safety_eval.attacks.base import AttackVector, AttackGenerator

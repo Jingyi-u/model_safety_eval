@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 from model_safety_eval.attacks.base import AttackVector, AttackGenerator
 

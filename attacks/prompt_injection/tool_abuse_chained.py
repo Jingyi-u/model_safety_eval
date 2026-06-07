@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from model_safety_eval.attacks.base import AttackVector, AttackGenerator
 
 TOOL_ATTACK_TEMPLATES = {

@@ -6,6 +6,8 @@ Input Perturbation Attack — 通过对输入进行细微的文本扰动
 - char_mapping 使用 Unicode 同形字 / 全角字符（视觉相似但码位不同）
 - input_perturbation 专注于语义保留的词级别扰动（错别字、谐音、缩写等）
 """
+from __future__ import annotations
+
 import random
 from model_safety_eval.attacks.base import AttackVector, AttackGenerator
 

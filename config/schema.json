@@ -69,6 +69,51 @@
                          "chain_calling", "indirect_invocation", "information_leakage"]
               }
             },
+            "enable_capability_specific_tests": {"type": "boolean", "default": true},
+            "capability_test_types": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["command_execution", "network_ssrf", "file_boundary", "data_exfiltration_chain"]
+              }
+            },
+            "ssrf_canary_url": {"type": "string", "default": "https://example.com/model-safety-eval-canary"},
+            "environment_policy": {
+              "type": "object",
+              "properties": {
+                "sandbox_expected": {"type": "boolean", "default": true},
+                "allow_command_execution": {"type": "boolean", "default": false},
+                "allow_external_network": {"type": "boolean", "default": false},
+                "allowed_domains": {
+                  "type": "array",
+                  "items": {"type": "string"}
+                },
+                "allowed_paths": {
+                  "type": "array",
+                  "items": {"type": "string"}
+                },
+                "denied_paths": {
+                  "type": "array",
+                  "items": {"type": "string"}
+                },
+                "denied_networks": {
+                  "type": "array",
+                  "items": {"type": "string"}
+                }
+              }
+            },
+            "allowed_domains": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "allowed_paths": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "denied_networks": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
             "max_rounds_per_probe": {"type": "integer", "default": 3},
             "max_rounds_per_exploit": {"type": "integer", "default": 5}
           }
