@@ -26,14 +26,11 @@ class ToolSecurityConfig(BaseModel):
         "parameter_tampering", "privilege_escalation",
         "chain_calling", "indirect_invocation", "information_leakage",
     ]
-    enable_capability_specific_tests: bool = True
     capability_test_types: list[str] = [
         "command_execution", "network_ssrf", "file_boundary", "data_exfiltration_chain",
     ]
     ssrf_canary_url: str = "https://example.com/model-safety-eval-canary"
     environment_policy: EnvironmentPolicyConfig = EnvironmentPolicyConfig()
-    allowed_domains: list[str] = []
-    allowed_paths: list[str] = []
     max_rounds_per_probe: int = 3
     max_rounds_per_exploit: int = 5
 
@@ -46,7 +43,6 @@ class EvaluationConfig(BaseModel):
     ]
     max_rounds_per_attack: int = 5
     dynamic_payloads: bool = True
-    enable_payload_mutation: bool = True
     payload_mutators: list[str] = ["base64", "roleplay_wrapper"]
     max_mutations_per_vector: int = 1
     detectors: list[str] = ["sensitive_leak", "tool_boundary"]

@@ -141,17 +141,16 @@ def _build_phase2_exploit_plan(
             "intent": test_type,
             "test_types": [test_type],
         })
-    if config.evaluation.tool_security.enable_capability_specific_tests:
-        assessment = tool_assessment or assess_tool_risk(discovered_tools)
-        for test_type in config.evaluation.tool_security.capability_test_types:
-            if not _has_capability_for_test(assessment, test_type):
-                continue
-            plan.append({
-                "technique_id": "tool_capability_exploit",
-                "technique_name": "工具能力专项测试",
-                "intent": test_type,
-                "test_types": [test_type],
-            })
+    assessment = tool_assessment or assess_tool_risk(discovered_tools)
+    for test_type in config.evaluation.tool_security.capability_test_types:
+        if not _has_capability_for_test(assessment, test_type):
+            continue
+        plan.append({
+            "technique_id": "tool_capability_exploit",
+            "technique_name": "工具能力专项测试",
+            "intent": test_type,
+            "test_types": [test_type],
+        })
     return plan
 
 
@@ -168,10 +167,6 @@ def _target_context(config: EvalConfig) -> dict:
 def _environment_policy_context(config: EvalConfig) -> dict:
     ts_config = config.evaluation.tool_security
     policy = ts_config.environment_policy.model_dump()
-    if ts_config.allowed_domains:
-        policy["allowed_domains"] = sorted(set(policy.get("allowed_domains", []) + ts_config.allowed_domains))
-    if ts_config.allowed_paths:
-        policy["allowed_paths"] = sorted(set(policy.get("allowed_paths", []) + ts_config.allowed_paths))
     policy["ssrf_canary_url"] = ts_config.ssrf_canary_url
     return policy
 
@@ -187,7 +182,7 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
     max_rounds = config.evaluation.max_rounds_per_attack
     detectors = build_detectors(config.evaluation.detectors)
     mutating_orchestrator = MutatingOrchestrator(
-        mutator_ids=config.evaluation.payload_mutators if config.evaluation.enable_payload_mutation else [],
+        mutator_ids=config.evaluation.payload_mutators,
         max_mutations_per_vector=config.evaluation.max_mutations_per_vector,
     )
 
@@ -313,8 +308,6 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
             ts_config = config.evaluation.tool_security
             context.update({
                 "ssrf_canary_url": ts_config.ssrf_canary_url,
-                "allowed_domains": ts_config.allowed_domains,
-                "allowed_paths": ts_config.allowed_paths,
                 "environment_policy": _environment_policy_context(config),
             })
 

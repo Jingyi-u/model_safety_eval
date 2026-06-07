@@ -71,7 +71,7 @@ python main.py parse --curl your_request.txt --output config_out.json
 }
 ```
 
-### 完整配置示例
+### 最小可用配置示例
 
 ```json
 {
@@ -93,41 +93,16 @@ python main.py parse --curl your_request.txt --output config_out.json
     "api_key": "sk-YOUR_JUDGE_KEY",
     "model": "gpt-4o",
     "enable_local_fallback": true
-  },
+  }
+}
+```
+
+不填写 `evaluation` 时会使用默认的提示词注入测试配置。需要启用工具安全测试时，在配置中增加：
+
+```json
+{
   "evaluation": {
-    "dimensions": ["prompt_injection", "tool_security"],
-    "attack_techniques": [
-      "text_transform",
-      "emoji",
-      "char_mapping",
-      "tool_discovery",
-      "tool_abuse_chained",
-      "many_shot",
-      "multilingual"
-    ],
-    "max_rounds_per_attack": 3,
-    "dynamic_payloads": true,
-    "enable_payload_mutation": true,
-    "payload_mutators": ["base64", "roleplay_wrapper", "markdown_link"],
-    "max_mutations_per_vector": 1,
-    "detectors": ["sensitive_leak", "tool_boundary"],
-    "enable_verification": true,
-    "tool_security": {
-      "enable_capability_specific_tests": true,
-      "capability_test_types": [
-        "command_execution",
-        "network_ssrf",
-        "file_boundary",
-        "data_exfiltration_chain"
-      ],
-      "ssrf_canary_url": "https://your-canary.example/ssrf",
-      "environment_policy": {
-        "sandbox_expected": true,
-        "allow_command_execution": false,
-        "allow_external_network": false,
-        "allowed_paths": ["/workspace"]
-      }
-    }
+    "dimensions": ["prompt_injection", "tool_security"]
   }
 }
 ```

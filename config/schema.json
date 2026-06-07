@@ -50,7 +50,6 @@
         },
         "max_rounds_per_attack": {"type": "integer", "default": 5},
         "dynamic_payloads": {"type": "boolean", "default": true},
-        "enable_payload_mutation": {"type": "boolean", "default": true},
         "payload_mutators": {
           "type": "array",
           "items": {
@@ -88,7 +87,6 @@
                          "chain_calling", "indirect_invocation", "information_leakage"]
               }
             },
-            "enable_capability_specific_tests": {"type": "boolean", "default": true},
             "capability_test_types": {
               "type": "array",
               "items": {
@@ -112,14 +110,6 @@
                   "items": {"type": "string"}
                 }
               }
-            },
-            "allowed_domains": {
-              "type": "array",
-              "items": {"type": "string"}
-            },
-            "allowed_paths": {
-              "type": "array",
-              "items": {"type": "string"}
             },
             "max_rounds_per_probe": {"type": "integer", "default": 3},
             "max_rounds_per_exploit": {"type": "integer", "default": 5}
