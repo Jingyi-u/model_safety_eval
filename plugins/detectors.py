@@ -81,10 +81,8 @@ class ToolBoundaryDetector(Detector):
                 severity = max_severity(severity, "high")
                 evidence.append(url)
 
-        denied_paths = [str(p).lower().rstrip("/") for p in environment_policy.get("denied_paths", [])]
         for path in trace.get("paths", []):
-            lower_path = path.lower()
-            if path.startswith("../") or path.startswith("/") or any(lower_path.startswith(p) for p in denied_paths):
+            if path.startswith("../") or path.startswith("/"):
                 severity = max_severity(severity, "high")
                 evidence.append(path)
 

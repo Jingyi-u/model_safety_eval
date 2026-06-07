@@ -110,14 +110,6 @@
                 "allowed_paths": {
                   "type": "array",
                   "items": {"type": "string"}
-                },
-                "denied_paths": {
-                  "type": "array",
-                  "items": {"type": "string"}
-                },
-                "denied_networks": {
-                  "type": "array",
-                  "items": {"type": "string"}
                 }
               }
             },
@@ -126,10 +118,6 @@
               "items": {"type": "string"}
             },
             "allowed_paths": {
-              "type": "array",
-              "items": {"type": "string"}
-            },
-            "denied_networks": {
               "type": "array",
               "items": {"type": "string"}
             },

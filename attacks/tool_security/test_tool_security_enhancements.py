@@ -142,7 +142,7 @@ class TestJudgeToolTrace(unittest.TestCase):
                 "paths": [],
                 "command_hints": [],
             },
-            environment_policy={"denied_networks": ["169.254.0.0/16"]},
+            environment_policy={},
         )
 
         self.assertEqual(result.level, 3)

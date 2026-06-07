@@ -125,16 +125,7 @@ python main.py parse --curl your_request.txt --output config_out.json
         "sandbox_expected": true,
         "allow_command_execution": false,
         "allow_external_network": false,
-        "allowed_paths": ["/workspace"],
-        "denied_paths": ["/etc", "/root", "~/.ssh", "~/.aws"],
-        "denied_networks": [
-          "127.0.0.0/8",
-          "::1/128",
-          "169.254.0.0/16",
-          "10.0.0.0/8",
-          "172.16.0.0/12",
-          "192.168.0.0/16"
-        ]
+        "allowed_paths": ["/workspace"]
       }
     }
   }

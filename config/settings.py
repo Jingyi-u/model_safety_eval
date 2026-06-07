@@ -15,11 +15,6 @@ class EnvironmentPolicyConfig(BaseModel):
     allow_external_network: bool = False
     allowed_domains: list[str] = []
     allowed_paths: list[str] = []
-    denied_paths: list[str] = ["/etc", "/root", "~/.ssh", "~/.aws", "~/.config"]
-    denied_networks: list[str] = [
-        "127.0.0.0/8", "::1/128", "169.254.0.0/16", "10.0.0.0/8",
-        "172.16.0.0/12", "192.168.0.0/16",
-    ]
 
 
 class ToolSecurityConfig(BaseModel):
@@ -39,10 +34,6 @@ class ToolSecurityConfig(BaseModel):
     environment_policy: EnvironmentPolicyConfig = EnvironmentPolicyConfig()
     allowed_domains: list[str] = []
     allowed_paths: list[str] = []
-    denied_networks: list[str] = [
-        "127.0.0.0/8", "::1/128", "169.254.0.0/16", "10.0.0.0/8",
-        "172.16.0.0/12", "192.168.0.0/16",
-    ]
     max_rounds_per_probe: int = 3
     max_rounds_per_exploit: int = 5
 

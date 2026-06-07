@@ -172,8 +172,6 @@ def _environment_policy_context(config: EvalConfig) -> dict:
         policy["allowed_domains"] = sorted(set(policy.get("allowed_domains", []) + ts_config.allowed_domains))
     if ts_config.allowed_paths:
         policy["allowed_paths"] = sorted(set(policy.get("allowed_paths", []) + ts_config.allowed_paths))
-    if ts_config.denied_networks:
-        policy["denied_networks"] = sorted(set(policy.get("denied_networks", []) + ts_config.denied_networks))
     policy["ssrf_canary_url"] = ts_config.ssrf_canary_url
     return policy
 
@@ -317,7 +315,6 @@ def create_workflow(config: EvalConfig, checkpoint_path: str | None = None) -> S
                 "ssrf_canary_url": ts_config.ssrf_canary_url,
                 "allowed_domains": ts_config.allowed_domains,
                 "allowed_paths": ts_config.allowed_paths,
-                "denied_networks": ts_config.denied_networks,
                 "environment_policy": _environment_policy_context(config),
             })
 
